@@ -13,6 +13,7 @@ fs.readFile('demo.dem', async (err, buffer) => {
 			score: demoFile.teams[number].score,
 			score_first_half: demoFile.teams[number].scoreFirstHalf,
 			score_second_half: demoFile.teams[number].scoreSecondHalf,
+			score_overtime: demoFile.teams[number].getProp('DT_Team', 'm_scoreOvertime'),
 			flag: demoFile.teams[number].flagImage,
 			players: demoFile.teams[number].members.map((player) => {
 				return (player && player.steamId) ? player.steamId : 'unknown_user'
@@ -41,12 +42,18 @@ fs.readFile('demo.dem', async (err, buffer) => {
 	demoFile.stringTables.on('update', (e) => {
 		if (e.table.name !== 'userinfo' || e.userData === null || e.userData.guid === 'BOT') return
 
-		playerMeta.set(e.userData.guid, e.userData)
+		playerMeta.set(e.userData.guid, {
+			name: e.userData.name,
+			userId: e.userData.userId,
+			guid: e.userData.guid,
+			fakePlayer: e.userData.fakePlayer,
+			isHltv: e.userData.isHltv,
+		})
 	})
 
 	// Round Start
 	demoFile.gameEvents.on('round_start', (e) => {
-		log('start', {})
+		log('round_start', {})
 	})
 
 	// Freeze Time ends
@@ -65,10 +72,10 @@ fs.readFile('demo.dem', async (err, buffer) => {
 	demoFile.gameEvents.on('round_end', (e) => {
 		if (e.message === '#SFUI_Notice_Game_Commencing') return
 
-		log('winner', {
+		log('round_winner', {
 			winner: e.winner,
 			reason: e.reason,
-			message: e.message, // TODO this should be replaceable with reason alone
+			// message: e.message,
 		})
 	})
 
@@ -76,10 +83,10 @@ fs.readFile('demo.dem', async (err, buffer) => {
 	demoFile.gameEvents.on('round_officially_ended', () => {
 		rounds.push([])
 
-		teams.set('t', teamData(2))
-		teams.set('ct', teamData(3))
+		teams.t = teamData(2)
+		teams.ct = teamData(3)
 
-		console.info(teams.get('t').score, 'T - CT', teams.get('ct').score)
+		console.info(teams.t.score, 'T - CT', teams.ct.score)
 	})
 
 	// Player Flashed
@@ -166,14 +173,34 @@ fs.readFile('demo.dem', async (err, buffer) => {
 		})
 	})
 
+	// Bomb Explosions
+	demoFile.gameEvents.on('bomb_exploded', (e) => {
+		const planter = demoFile.entities.getByUserId(e.userid)
+
+		log('exploded', {
+			planter: (planter) ? planter.steamId : 'unknown_user',
+			site: e.site,
+		})
+	})
+
 	demoFile.parse(buffer)
 
 	demoFile.on('end', (e) => {
 		if (rounds[rounds.length - 1].length === 0) rounds.splice(rounds.length - 1)
 
+		teams.t.score = demoFile.teams[2].score
+		teams.t.score_first_half = demoFile.teams[2].scoreFirstHalf
+		teams.t.score_second_half = demoFile.teams[2].scoreSecondHalf
+		teams.t.score_overtime = demoFile.teams[2].getProp('DT_Team', 'm_scoreOvertime')
+
+		teams.ct.score = demoFile.teams[3].score
+		teams.ct.score_first_half = demoFile.teams[3].scoreFirstHalf
+		teams.ct.score_second_half = demoFile.teams[3].scoreSecondHalf
+		teams.ct.score_overtime = demoFile.teams[3].getProp('DT_Team', 'm_scoreOvertime')
+
 		fs.writeFile('demo.json', JSON.stringify({
 			meta,
-			playerMeta,
+			playerMeta: Object.fromEntries(playerMeta),
 			teams,
 			rounds,
 		}), (err) => {
@@ -186,7 +213,5 @@ fs.readFile('demo.dem', async (err, buffer) => {
 			teams,
 			rounds,
 		})
-
-		// console.log(rounds)
 	})
 })
