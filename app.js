@@ -6,6 +6,7 @@ const playerMeta = new Map()
 const teams = {}
 let rounds = [ [] ]
 
+const bombsiteCenters = {}
 let checkEquipmentValueAtTick = -1
 
 fs.readFile(process.argv[2], async (err, buffer) => {
@@ -29,6 +30,21 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 				return player !== 'unknown_user'
 			}),
 		}
+	}
+
+	const vectorInside = (v, min, max) => {
+		return v.x >= min.x && v.x <= max.x
+			&& v.y >= min.y && v.y <= max.y
+			&& v.z >= min.z && v.z <= max.z
+	}
+
+	const bombsiteName = (siteIndex) => {
+		const entity = demoFile.entities.entities[siteIndex]
+		const vectorMin = entity.getProp('DT_CollisionProperty', 'm_vecMins')
+		const vectorMax = entity.getProp('DT_CollisionProperty', 'm_vecMaxs')
+
+		if (vectorInside(bombsiteCenters.a, vectorMin, vectorMax)) return 'a'
+		if (vectorInside(bombsiteCenters.b, vectorMin, vectorMax)) return 'b'
 	}
 
 	const demoFile = new demofile.DemoFile()
@@ -64,6 +80,16 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 			userId: e.userData.userId,
 			bot: e.userData.guid === 'BOT',
 		})
+	})
+
+	demoFile.entities.on('change', (e) => {
+		if (e.tableName === 'DT_CSPlayerResource') {
+			if (e.varName === 'm_bombsiteCenterA') {
+				bombsiteCenters.a = e.newValue
+			} else if (e.varName === 'm_bombsiteCenterB') {
+				bombsiteCenters.b = e.newValue
+			}
+		}
 	})
 
 	// Round Start
@@ -233,7 +259,7 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 
 		log('plant', {
 			planter: steamId(planter),
-			site: e.site,
+			site: bombsiteName(e.site),
 		})
 	})
 
@@ -243,7 +269,7 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 
 		log('defuse', {
 			defuser: steamId(defuser),
-			site: e.site,
+			site: bombsiteName(e.site),
 		})
 	})
 
