@@ -9,6 +9,14 @@ let rounds = [ [] ]
 let checkEquipmentValueAtTick = -1
 
 fs.readFile(process.argv[2], async (err, buffer) => {
+	const steamId = (player) => {
+		if (! player || ! player.steamId) return 'unknown_user'
+
+		return (player.steamId === 'BOT')
+			? `BOT_${player.userId}`
+			: player.steamId
+	}
+
 	const teamData = (number) => {
 		return {
 			name: demoFile.teams[number].clanName,
@@ -17,10 +25,8 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 			score_second_half: demoFile.teams[number].scoreSecondHalf,
 			score_overtime: demoFile.teams[number].getProp('DT_Team', 'm_scoreOvertime'),
 			flag: demoFile.teams[number].flagImage,
-			players: demoFile.teams[number].members.map((player) => {
-				return (player && player.steamId) ? player.steamId : 'unknown_user'
-			}).filter((player) => {
-				return player !== 'BOT' && player !== 'unknown_user'
+			players: demoFile.teams[number].members.map(steamId).filter((player) => {
+				return player !== 'unknown_user'
 			}),
 		}
 	}
@@ -44,14 +50,19 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 
 	// Player Data
 	demoFile.stringTables.on('update', (e) => {
-		if (e.table.name !== 'userinfo' || e.userData === null || e.userData.guid === 'BOT') return
+		if (e.table.name !== 'userinfo' || e.userData === null || (e.userData.guid === 'BOT' && e.userData.name === 'GOTV')) return
 
-		playerMeta.set(e.userData.guid, {
-			name: e.userData.name,
+		const guid = (e.userData.guid === 'BOT')
+			? `BOT_${e.userData.userId}`
+			: e.userData.guid
+
+		playerMeta.set(guid, {
+			guid,
+			name: (e.userData.guid === 'BOT')
+				? `BOT ${e.userData.name}`
+				: e.userData.name,
 			userId: e.userData.userId,
-			guid: e.userData.guid,
-			fakePlayer: e.userData.fakePlayer,
-			isHltv: e.userData.isHltv,
+			bot: e.userData.guid === 'BOT',
 		})
 	})
 
@@ -74,10 +85,10 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 		if (tick !== checkEquipmentValueAtTick) return
 
 		for (const player of demoFile.entities.players) {
-			if ((player.teamNumber !== 2 && player.teamNumber !== 3) || player.isFakePlayer || player.isHltv) continue
+			if ((player.teamNumber !== 2 && player.teamNumber !== 3) || player.isHltv) continue
 
 			log('money_equipment', {
-				player: player.steamId,
+				player: steamId(player),
 				money_remaining: player.account,
 				equipment_value: player.currentEquipmentValue,
 			})
@@ -88,7 +99,7 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 	demoFile.gameEvents.on('round_mvp', (e) => {
 		const mvp = demoFile.entities.getByUserId(e.userid)
 
-		log('mvp', { mvp: (mvp) ? mvp.steamId : 'unknown_user' })
+		log('mvp', { mvp: steamId(mvp) })
 	})
 
 	// Round Ended
@@ -116,18 +127,14 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 			if (remainingPlayers >= demoFile.teams[2].members.length / 2) {
 				// same teams, merge player arrays
 				teams.t = Object.assign(teamData(2), {
-					players: teams.t.players.concat(demoFile.teams[2].members.map((player) => {
-						return (player && player.steamId) ? player.steamId : 'unknown_user'
-					}).filter((player) => {
-						return ! teams.t.players.includes(player) && player !== 'BOT' && player !== 'unknown_user'
+					players: teams.t.players.concat(demoFile.teams[2].members.map(steamId).filter((player) => {
+						return ! teams.t.players.includes(player) && player !== 'unknown_user'
 					}))
 				})
 
 				teams.ct = Object.assign(teamData(3), {
-					players: teams.ct.players.concat(demoFile.teams[3].members.map((player) => {
-						return (player && player.steamId) ? player.steamId : 'unknown_user'
-					}).filter((player) => {
-						return ! teams.ct.players.includes(player) && player !== 'BOT' && player !== 'unknown_user'
+					players: teams.ct.players.concat(demoFile.teams[3].members.map(steamId).filter((player) => {
+						return ! teams.ct.players.includes(player) && player !== 'unknown_user'
 					}))
 				})
 			} else {
@@ -136,18 +143,14 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 				const previousCtPlayers = teams.ct.players
 
 				teams.t = Object.assign(teamData(2), {
-					players: previousCtPlayers.concat(demoFile.teams[2].members.map((player) => {
-						return (player && player.steamId) ? player.steamId : 'unknown_user'
-					}).filter((player) => {
-						return ! previousCtPlayers.includes(player) && player !== 'BOT' && player !== 'unknown_user'
+					players: previousCtPlayers.concat(demoFile.teams[2].members.map(steamId).filter((player) => {
+						return ! previousCtPlayers.includes(player) && player !== 'unknown_user'
 					}))
 				})
 
 				teams.ct = Object.assign(teamData(3), {
-					players: previousTPlayers.concat(demoFile.teams[3].members.map((player) => {
-						return (player && player.steamId) ? player.steamId : 'unknown_user'
-					}).filter((player) => {
-						return ! previousTPlayers.includes(player) && player !== 'BOT' && player !== 'unknown_user'
+					players: previousTPlayers.concat(demoFile.teams[3].members.map(steamId).filter((player) => {
+						return ! previousTPlayers.includes(player) && player !== 'unknown_user'
 					}))
 				})
 			}
@@ -167,8 +170,8 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 		const attacker = demoFile.entities.getByUserId(e.attacker)
 
 		log('flashed', {
-			attacker: (attacker) ? attacker.steamId : 'unknown_user',
-			victim: (victim) ? victim.steamId : 'unknown_user',
+			attacker: steamId(attacker),
+			victim: steamId(victim),
 			entity_id: e.entityid,
 			duration: e.blind_duration,
 		})
@@ -180,8 +183,8 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 		const victim = demoFile.entities.getByUserId(e.userid)
 
 		log('damage', {
-			attacker: (attacker) ? attacker.steamId : 'unknown_user',
-			victim: (victim) ? victim.steamId : 'unknown_user',
+			attacker: steamId(attacker),
+			victim: steamId(victim),
 
 			damage: e.dmg_health,
 			armor: e.dmg_armor,
@@ -208,10 +211,10 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 			: demoFile.entities.getByUserId(e.assister)
 
 		log('kill', {
-			attacker: (attacker) ? attacker.steamId : 'unknown_user',
-			victim: (victim) ? victim.steamId : 'unknown_user',
+			attacker: steamId(attacker),
+			victim: steamId(victim),
 
-			assister: (assister === false) ? false : ((assister) ? assister.steamId : 'unknown_user'),
+			assister: (assister === false) ? false : steamId(assister),
 			flash_assist: e.assistedflash,
 
 			weapon: e.weapon,
@@ -229,7 +232,7 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 		const planter = demoFile.entities.getByUserId(e.userid)
 
 		log('plant', {
-			planter: (planter) ? planter.steamId : 'unknown_user',
+			planter: steamId(planter),
 			site: e.site,
 		})
 	})
@@ -239,7 +242,7 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 		const defuser = demoFile.entities.getByUserId(e.userid)
 
 		log('defuse', {
-			defuser: (defuser) ? defuser.steamId : 'unknown_user',
+			defuser: steamId(defuser),
 			site: e.site,
 		})
 	})
@@ -249,7 +252,7 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 		const planter = demoFile.entities.getByUserId(e.userid)
 
 		log('exploded', {
-			planter: (planter) ? planter.steamId : 'unknown_user',
+			planter: steamId(planter),
 			site: e.site,
 		})
 	})
@@ -259,7 +262,7 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 		const thrower = demoFile.entities.getByUserId(e.userid)
 
 		log('smoke_detonated', {
-			thrower: (thrower) ? thrower.steamId : 'unknown_user',
+			thrower: steamId(thrower),
 		})
 	})
 
@@ -268,7 +271,7 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 		const thrower = demoFile.entities.getByUserId(e.userid)
 
 		log('he_detonated', {
-			thrower: (thrower) ? thrower.steamId : 'unknown_user',
+			thrower: steamId(thrower),
 		})
 	})
 
@@ -277,7 +280,7 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 		const thrower = demoFile.entities.getByUserId(e.userid)
 
 		log('flashbang_detonated', {
-			thrower: (thrower) ? thrower.steamId : 'unknown_user',
+			thrower: steamId(thrower),
 			entity_id: e.entityid,
 		})
 	})
@@ -295,7 +298,18 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 		else if (grenade === 'smokegrenade') grenade = 'smoke'
 
 		log(`${grenade}_thrown`, {
-			thrower: (thrower) ? thrower.steamId : 'unknown_user',
+			thrower: steamId(thrower),
+		})
+	})
+
+	// Bot Takeovers
+	demoFile.gameEvents.on('bot_takeover', (e) => {
+		const human = demoFile.entities.getByUserId(e.userid)
+		const bot = demoFile.entities.getByUserId(e.botid)
+
+		log('bot_takeover', {
+			human: steamId(human),
+			bot: steamId(bot),
 		})
 	})
 
@@ -338,7 +352,7 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 			meta,
 			playerMeta,
 			teams,
-			rounds,
+			rounds: rounds.length,
 		})
 	})
 })
