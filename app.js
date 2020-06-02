@@ -3,10 +3,12 @@ import demofile from 'demofile'
 
 const meta = {}
 const playerMeta = new Map()
-const teams = new Map()
+const teams = {}
 let rounds = [ [] ]
 
-fs.readFile('demo.dem', async (err, buffer) => {
+let checkEquipmentValueAtTick = -1
+
+fs.readFile(process.argv[2], async (err, buffer) => {
 	const teamData = (number) => {
 		return {
 			name: demoFile.teams[number].clanName,
@@ -17,6 +19,8 @@ fs.readFile('demo.dem', async (err, buffer) => {
 			flag: demoFile.teams[number].flagImage,
 			players: demoFile.teams[number].members.map((player) => {
 				return (player && player.steamId) ? player.steamId : 'unknown_user'
+			}).filter((player) => {
+				return player !== 'BOT' && player !== 'unknown_user'
 			}),
 		}
 	}
@@ -53,12 +57,31 @@ fs.readFile('demo.dem', async (err, buffer) => {
 
 	// Round Start
 	demoFile.gameEvents.on('round_start', (e) => {
-		log('round_start', {})
+		if (rounds[rounds.length - 1].length > 0) rounds.push([])
+
+		log('round_start', { number: demoFile.gameRules.roundsPlayed })
 	})
 
 	// Freeze Time ends
 	demoFile.gameEvents.on('round_freeze_end', (e) => {
-		log('freeze_time_ended', {})
+		log('freeze_time_ended', { number: demoFile.gameRules.roundsPlayed })
+
+		checkEquipmentValueAtTick = demoFile.currentTick + 4 * demoFile.tickRate
+	})
+
+	// Money and Equipment Value
+	demoFile.on('tickend', (tick) => {
+		if (tick !== checkEquipmentValueAtTick) return
+
+		for (const player of demoFile.entities.players) {
+			if ((player.teamNumber !== 2 && player.teamNumber !== 3) || player.isFakePlayer || player.isHltv) continue
+
+			log('money_equipment', {
+				player: player.steamId,
+				money_remaining: player.account,
+				equipment_value: player.currentEquipmentValue,
+			})
+		}
 	})
 
 	// MVPs
@@ -83,10 +106,57 @@ fs.readFile('demo.dem', async (err, buffer) => {
 	demoFile.gameEvents.on('round_officially_ended', () => {
 		rounds.push([])
 
-		teams.t = teamData(2)
-		teams.ct = teamData(3)
+		if (teams.t && teams.ct) {
+			let remainingPlayers = 0
 
-		console.info(teams.t.score, 'T - CT', teams.ct.score)
+			for (const player of demoFile.teams[2].members) {
+				if (teams.t.players.includes(player.steamId)) remainingPlayers++
+			}
+
+			if (remainingPlayers >= demoFile.teams[2].members.length / 2) {
+				// same teams, merge player arrays
+				teams.t = Object.assign(teamData(2), {
+					players: teams.t.players.concat(demoFile.teams[2].members.map((player) => {
+						return (player && player.steamId) ? player.steamId : 'unknown_user'
+					}).filter((player) => {
+						return ! teams.t.players.includes(player) && player !== 'BOT' && player !== 'unknown_user'
+					}))
+				})
+
+				teams.ct = Object.assign(teamData(3), {
+					players: teams.ct.players.concat(demoFile.teams[3].members.map((player) => {
+						return (player && player.steamId) ? player.steamId : 'unknown_user'
+					}).filter((player) => {
+						return ! teams.ct.players.includes(player) && player !== 'BOT' && player !== 'unknown_user'
+					}))
+				})
+			} else {
+				// teams switched (probably), swap teams (but don't discard players that were in the team before the switch but aren't anymore)
+				const previousTPlayers = teams.t.players
+				const previousCtPlayers = teams.ct.players
+
+				teams.t = Object.assign(teamData(2), {
+					players: previousCtPlayers.concat(demoFile.teams[2].members.map((player) => {
+						return (player && player.steamId) ? player.steamId : 'unknown_user'
+					}).filter((player) => {
+						return ! previousCtPlayers.includes(player) && player !== 'BOT' && player !== 'unknown_user'
+					}))
+				})
+
+				teams.ct = Object.assign(teamData(3), {
+					players: previousTPlayers.concat(demoFile.teams[3].members.map((player) => {
+						return (player && player.steamId) ? player.steamId : 'unknown_user'
+					}).filter((player) => {
+						return ! previousTPlayers.includes(player) && player !== 'BOT' && player !== 'unknown_user'
+					}))
+				})
+			}
+		} else {
+			teams.t = teamData(2)
+			teams.ct = teamData(3)
+		}
+
+		if (process.stdout.isTTY) console.info(teams.t.score, 'T - CT', teams.ct.score)
 	})
 
 	// Player Flashed
@@ -120,12 +190,13 @@ fs.readFile('demo.dem', async (err, buffer) => {
 		})
 	})
 
+	// Freeze Time ended (first round)
 	demoFile.gameEvents.on('round_announce_match_start', (e) => {
-		console.info('match started')
+		if (process.stdout.isTTY) console.info('match started')
 
 		rounds = [ [] ]
 
-		log('freeze_time_ended')
+		log('freeze_time_ended', { number: demoFile.gameRules.roundsPlayed })
 	})
 
 	// Kills/Deaths
@@ -183,27 +254,83 @@ fs.readFile('demo.dem', async (err, buffer) => {
 		})
 	})
 
+	// Smokes Detonated
+	demoFile.gameEvents.on('smokegrenade_detonate', (e) => {
+		const thrower = demoFile.entities.getByUserId(e.userid)
+
+		log('smoke_detonated', {
+			thrower: (thrower) ? thrower.steamId : 'unknown_user',
+		})
+	})
+
+	// HEs Detonated
+	demoFile.gameEvents.on('hegrenade_detonate', (e) => {
+		const thrower = demoFile.entities.getByUserId(e.userid)
+
+		log('he_detonated', {
+			thrower: (thrower) ? thrower.steamId : 'unknown_user',
+		})
+	})
+
+	// HEs Detonated
+	demoFile.gameEvents.on('flashbang_detonate', (e) => {
+		const thrower = demoFile.entities.getByUserId(e.userid)
+
+		log('flashbang_detonated', {
+			thrower: (thrower) ? thrower.steamId : 'unknown_user',
+			entity_id: e.entityid,
+		})
+	})
+
+	// Grenades thrown
+	demoFile.gameEvents.on('weapon_fire', (e) => {
+		if (! ['weapon_incgrenade', 'weapon_molotov', 'weapon_flashbang', 'weapon_smokegrenade', 'weapon_hegrenade'].includes(e.weapon)) return
+
+		const thrower = demoFile.entities.getByUserId(e.userid)
+
+		let grenade = e.weapon.substring(7)
+
+		if (grenade === 'incgrenade') grenade = 'molotov'
+		else if (grenade === 'hegrenade') grenade = 'he'
+		else if (grenade === 'smokegrenade') grenade = 'smoke'
+
+		log(`${grenade}_thrown`, {
+			thrower: (thrower) ? thrower.steamId : 'unknown_user',
+		})
+	})
+
 	demoFile.parse(buffer)
+
+	const applyFinalScore = (name, number) => {
+		if (! teams[name]) return teams[name] = teamData(number)
+
+		teams[name].score = demoFile.teams[number].score
+		teams[name].score_first_half = demoFile.teams[number].scoreFirstHalf
+		teams[name].score_second_half = demoFile.teams[number].scoreSecondHalf
+		teams[name].score_overtime = demoFile.teams[number].getProp('DT_Team', 'm_scoreOvertime')
+	}
 
 	demoFile.on('end', (e) => {
 		if (rounds[rounds.length - 1].length === 0) rounds.splice(rounds.length - 1)
 
-		teams.t.score = demoFile.teams[2].score
-		teams.t.score_first_half = demoFile.teams[2].scoreFirstHalf
-		teams.t.score_second_half = demoFile.teams[2].scoreSecondHalf
-		teams.t.score_overtime = demoFile.teams[2].getProp('DT_Team', 'm_scoreOvertime')
+		applyFinalScore('t', 2)
+		applyFinalScore('ct', 3)
 
-		teams.ct.score = demoFile.teams[3].score
-		teams.ct.score_first_half = demoFile.teams[3].scoreFirstHalf
-		teams.ct.score_second_half = demoFile.teams[3].scoreSecondHalf
-		teams.ct.score_overtime = demoFile.teams[3].getProp('DT_Team', 'm_scoreOvertime')
+		meta.max_rounds = demoFile.conVars.vars.get('mp_maxrounds')
+		meta.has_halftime = demoFile.conVars.vars.get('mp_halftime') === '1'
 
-		fs.writeFile('demo.json', JSON.stringify({
+		const json = JSON.stringify({
 			meta,
 			playerMeta: Object.fromEntries(playerMeta),
 			teams,
 			rounds,
-		}), (err) => {
+		})
+
+		if (! process.stdout.isTTY) {
+			return console.info(json)
+		}
+
+		fs.writeFile('demo.json', json, (err) => {
 			if (err) throw err
 		})
 
