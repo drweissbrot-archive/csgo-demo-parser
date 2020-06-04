@@ -94,8 +94,6 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 
 	// Round Start
 	demoFile.gameEvents.on('round_start', (e) => {
-		if (rounds[rounds.length - 1].length > 0) rounds.push([])
-
 		log('round_start', { number: demoFile.gameRules.roundsPlayed })
 	})
 
@@ -147,10 +145,10 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 			let remainingPlayers = 0
 
 			for (const player of demoFile.teams[2].members) {
-				if (teams.t.players.includes(player.steamId)) remainingPlayers++
+				if (teams.t.players.includes(player.steamId) && player.steamId !== 'BOT') remainingPlayers++
 			}
 
-			if (remainingPlayers >= demoFile.teams[2].members.length / 2) {
+			if (remainingPlayers > demoFile.teams[2].members.filter(({ steamId }) => steamId !== 'BOT').length / 2) {
 				// same teams, merge player arrays
 				teams.t = Object.assign(teamData(2), {
 					players: teams.t.players.concat(demoFile.teams[2].members.map(steamId).filter((player) => {
@@ -193,10 +191,8 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 		let victim = demoFile.entities.getByUserId(e.userid)
 		if (! victim || ! victim.isAlive) return
 
-		const attacker = demoFile.entities.getByUserId(e.attacker)
-
 		log('flashed', {
-			attacker: steamId(attacker),
+			attacker: steamId(demoFile.entities.getByUserId(e.attacker)),
 			victim: steamId(victim),
 			entity_id: e.entityid,
 			duration: e.blind_duration,
@@ -205,12 +201,9 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 
 	// Damage
 	demoFile.gameEvents.on('player_hurt', (e) => {
-		const attacker = demoFile.entities.getByUserId(e.attacker)
-		const victim = demoFile.entities.getByUserId(e.userid)
-
 		log('damage', {
-			attacker: steamId(attacker),
-			victim: steamId(victim),
+			attacker: steamId(demoFile.entities.getByUserId(e.attacker)),
+			victim: steamId(demoFile.entities.getByUserId(e.userid)),
 
 			damage: e.dmg_health,
 			armor: e.dmg_armor,
@@ -230,15 +223,13 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 
 	// Kills/Deaths
 	demoFile.gameEvents.on('player_death', (e) => {
-		const attacker = demoFile.entities.getByUserId(e.attacker)
-		const victim = demoFile.entities.getByUserId(e.userid)
 		const assister = (e.assister === 0)
 			? false
 			: demoFile.entities.getByUserId(e.assister)
 
 		log('kill', {
-			attacker: steamId(attacker),
-			victim: steamId(victim),
+			attacker: steamId(demoFile.entities.getByUserId(e.attacker)),
+			victim: steamId(demoFile.entities.getByUserId(e.userid)),
 
 			assister: (assister === false) ? false : steamId(assister),
 			flash_assist: e.assistedflash,
@@ -255,58 +246,46 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 
 	// Plants
 	demoFile.gameEvents.on('bomb_planted', (e) => {
-		const planter = demoFile.entities.getByUserId(e.userid)
-
 		log('plant', {
-			planter: steamId(planter),
+			planter: steamId(demoFile.entities.getByUserId(e.userid)),
 			site: bombsiteName(e.site),
 		})
 	})
 
 	// Defuses
 	demoFile.gameEvents.on('bomb_defused', (e) => {
-		const defuser = demoFile.entities.getByUserId(e.userid)
-
 		log('defuse', {
-			defuser: steamId(defuser),
+			defuser: steamId(demoFile.entities.getByUserId(e.userid)),
 			site: bombsiteName(e.site),
 		})
 	})
 
 	// Bomb Explosions
 	demoFile.gameEvents.on('bomb_exploded', (e) => {
-		const planter = demoFile.entities.getByUserId(e.userid)
-
 		log('exploded', {
-			planter: steamId(planter),
+			planter: steamId(demoFile.entities.getByUserId(e.userid)),
 			site: e.site,
 		})
 	})
 
 	// Smokes Detonated
 	demoFile.gameEvents.on('smokegrenade_detonate', (e) => {
-		const thrower = demoFile.entities.getByUserId(e.userid)
-
 		log('smoke_detonated', {
-			thrower: steamId(thrower),
+			thrower: steamId(demoFile.entities.getByUserId(e.userid)),
 		})
 	})
 
 	// HEs Detonated
 	demoFile.gameEvents.on('hegrenade_detonate', (e) => {
-		const thrower = demoFile.entities.getByUserId(e.userid)
-
 		log('he_detonated', {
-			thrower: steamId(thrower),
+			thrower: steamId(demoFile.entities.getByUserId(e.userid)),
 		})
 	})
 
 	// HEs Detonated
 	demoFile.gameEvents.on('flashbang_detonate', (e) => {
-		const thrower = demoFile.entities.getByUserId(e.userid)
-
 		log('flashbang_detonated', {
-			thrower: steamId(thrower),
+			thrower: steamId(demoFile.entities.getByUserId(e.userid)),
 			entity_id: e.entityid,
 		})
 	})
@@ -330,12 +309,17 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 
 	// Bot Takeovers
 	demoFile.gameEvents.on('bot_takeover', (e) => {
-		const human = demoFile.entities.getByUserId(e.userid)
-		const bot = demoFile.entities.getByUserId(e.botid)
-
 		log('bot_takeover', {
-			human: steamId(human),
-			bot: steamId(bot),
+			human: steamId(demoFile.entities.getByUserId(e.userid)),
+			bot: steamId(demoFile.entities.getByUserId(e.botid)),
+		})
+	})
+
+	// Item Pickups
+	demoFile.gameEvents.on('item_pickup', (e) => {
+		log('item_pickup', {
+			player: steamId(demoFile.entities.getByUserId(e.userid)),
+			item: e.item,
 		})
 	})
 
@@ -351,10 +335,13 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 	}
 
 	demoFile.on('end', (e) => {
-		if (rounds[rounds.length - 1].length === 0) rounds.splice(rounds.length - 1)
+		while (rounds[rounds.length - 1].length === 0) rounds.splice(rounds.length - 1)
 
 		applyFinalScore('t', 2)
 		applyFinalScore('ct', 3)
+
+		meta.game_mode = demoFile.conVars.vars.get('game_mode') || 0
+		meta.game_type = demoFile.conVars.vars.get('game_type') || 0
 
 		meta.max_rounds = demoFile.conVars.vars.get('mp_maxrounds')
 		meta.has_halftime = demoFile.conVars.vars.get('mp_halftime') === '1'
