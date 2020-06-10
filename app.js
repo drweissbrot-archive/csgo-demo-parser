@@ -57,6 +57,50 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 		)
 	}
 
+	const assignOrSwapTeams = () => {
+		if (teams.t && teams.ct) {
+			let remainingPlayers = 0
+
+			for (const player of demoFile.teams[2].members) {
+				if (teams.t.players.includes(player.steamId) && player.steamId !== 'BOT') remainingPlayers++
+			}
+
+			if (remainingPlayers > demoFile.teams[2].members.filter(({ steamId }) => steamId !== 'BOT').length / 2) {
+				// same teams, merge player arrays
+				teams.t = Object.assign(teamData(2), {
+					players: teams.t.players.concat(demoFile.teams[2].members.map(steamId).filter((player) => {
+						return ! teams.t.players.includes(player) && player !== 'unknown_user'
+					}))
+				})
+
+				teams.ct = Object.assign(teamData(3), {
+					players: teams.ct.players.concat(demoFile.teams[3].members.map(steamId).filter((player) => {
+						return ! teams.ct.players.includes(player) && player !== 'unknown_user'
+					}))
+				})
+			} else {
+				// teams switched (probably), swap teams (but don't discard players that were in the team before the switch but aren't anymore)
+				const previousTPlayers = teams.t.players
+				const previousCtPlayers = teams.ct.players
+
+				teams.t = Object.assign(teamData(2), {
+					players: previousCtPlayers.concat(demoFile.teams[2].members.map(steamId).filter((player) => {
+						return ! previousCtPlayers.includes(player) && player !== 'unknown_user'
+					}))
+				})
+
+				teams.ct = Object.assign(teamData(3), {
+					players: previousTPlayers.concat(demoFile.teams[3].members.map(steamId).filter((player) => {
+						return ! previousTPlayers.includes(player) && player !== 'unknown_user'
+					}))
+				})
+			}
+		} else {
+			teams.t = teamData(2)
+			teams.ct = teamData(3)
+		}
+	}
+
 	// Meta
 	demoFile.on('start', () => {
 		meta.server_name = demoFile.header.serverName
@@ -143,47 +187,7 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 	demoFile.gameEvents.on('round_officially_ended', () => {
 		rounds.push([])
 
-		if (teams.t && teams.ct) {
-			let remainingPlayers = 0
-
-			for (const player of demoFile.teams[2].members) {
-				if (teams.t.players.includes(player.steamId) && player.steamId !== 'BOT') remainingPlayers++
-			}
-
-			if (remainingPlayers > demoFile.teams[2].members.filter(({ steamId }) => steamId !== 'BOT').length / 2) {
-				// same teams, merge player arrays
-				teams.t = Object.assign(teamData(2), {
-					players: teams.t.players.concat(demoFile.teams[2].members.map(steamId).filter((player) => {
-						return ! teams.t.players.includes(player) && player !== 'unknown_user'
-					}))
-				})
-
-				teams.ct = Object.assign(teamData(3), {
-					players: teams.ct.players.concat(demoFile.teams[3].members.map(steamId).filter((player) => {
-						return ! teams.ct.players.includes(player) && player !== 'unknown_user'
-					}))
-				})
-			} else {
-				// teams switched (probably), swap teams (but don't discard players that were in the team before the switch but aren't anymore)
-				const previousTPlayers = teams.t.players
-				const previousCtPlayers = teams.ct.players
-
-				teams.t = Object.assign(teamData(2), {
-					players: previousCtPlayers.concat(demoFile.teams[2].members.map(steamId).filter((player) => {
-						return ! previousCtPlayers.includes(player) && player !== 'unknown_user'
-					}))
-				})
-
-				teams.ct = Object.assign(teamData(3), {
-					players: previousTPlayers.concat(demoFile.teams[3].members.map(steamId).filter((player) => {
-						return ! previousTPlayers.includes(player) && player !== 'unknown_user'
-					}))
-				})
-			}
-		} else {
-			teams.t = teamData(2)
-			teams.ct = teamData(3)
-		}
+		assignOrSwapTeams()
 
 		if (process.stdout.isTTY) console.info(teams.t.score, 'T - CT', teams.ct.score)
 	})
@@ -338,6 +342,8 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 
 	demoFile.on('end', (e) => {
 		while (rounds[rounds.length - 1].length === 0) rounds.splice(rounds.length - 1)
+
+		assignOrSwapTeams()
 
 		applyFinalScore('t', 2)
 		applyFinalScore('ct', 3)
