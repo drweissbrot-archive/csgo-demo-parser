@@ -43,8 +43,10 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 		const vectorMin = entity.getProp('DT_CollisionProperty', 'm_vecMins')
 		const vectorMax = entity.getProp('DT_CollisionProperty', 'm_vecMaxs')
 
-		if (vectorInside(bombsiteCenters.a, vectorMin, vectorMax)) return 'a'
-		if (vectorInside(bombsiteCenters.b, vectorMin, vectorMax)) return 'b'
+		if (bombsiteCenters.a && vectorInside(bombsiteCenters.a, vectorMin, vectorMax)) return 'a'
+		if (bombsiteCenters.b && vectorInside(bombsiteCenters.b, vectorMin, vectorMax)) return 'b'
+
+		throw 'cannot find bombsite'
 	}
 
 	const demoFile = new demofile.DemoFile()
@@ -365,6 +367,8 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 			meta,
 			playerMeta,
 			teams,
+			t: teams.t,
+			ct: teams.ct,
 			rounds: rounds.length,
 		})
 	})
