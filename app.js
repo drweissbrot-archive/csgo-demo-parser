@@ -9,9 +9,24 @@ let rounds = [ [] ]
 const bombsiteCenters = {}
 let checkEquipmentValueAtTick = -1
 
+let replaceSteamIds = false
+
+if (process.argv[3]) {
+	const segments = process.argv[3].split(',')
+
+	if (segments.length >= 2) {
+		replaceSteamIds = {
+			replace: segments.slice(1),
+			with: segments[0],
+		}
+	}
+}
+
 fs.readFile(process.argv[2], async (err, buffer) => {
 	const steamId = (player) => {
 		if (! player || ! player.steamId) return 'unknown_user'
+
+		if (replaceSteamIds && replaceSteamIds.replace.includes(player.steamId)) return replaceSteamIds.with
 
 		return (player.steamId === 'BOT')
 			? `BOT_${player.userId}`
@@ -124,7 +139,11 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 
 		const guid = (e.userData.guid === 'BOT')
 			? `BOT_${e.userData.userId}`
-			: e.userData.guid
+			: (
+				(replaceSteamIds && replaceSteamIds.replace.includes(e.userData.guid))
+					? replaceSteamIds.with
+					: e.userData.guid
+			)
 
 		playerMeta.set(guid, {
 			guid,
