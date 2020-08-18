@@ -81,13 +81,13 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 		let remainingPlayersCt = 0
 
 		for (const player of demoFile.teams[3].members) {
-			if (teams.ct.players.includes(player.steamId) && player.steamId !== 'BOT') remainingPlayersCt++
+			if (player && teams.ct.players.includes(player.steamId) && player.steamId !== 'BOT') remainingPlayersCt++
 		}
 
 		let remainingPlayersT = 0
 
 		for (const player of demoFile.teams[2].members) {
-			if (teams.t.players.includes(player.steamId) && player.steamId !== 'BOT') remainingPlayersT++
+			if (player && teams.t.players.includes(player.steamId) && player.steamId !== 'BOT') remainingPlayersT++
 		}
 
 		if (forceNoSwap
