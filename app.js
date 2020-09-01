@@ -174,6 +174,8 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 	demoFile.gameEvents.on('round_freeze_end', (e) => {
 		log('freeze_time_ended', { number: demoFile.gameRules.roundsPlayed })
 
+		assignOrSwapTeams()
+
 		checkEquipmentValueAtTick = demoFile.currentTick + 4 * demoFile.tickRate
 	})
 
@@ -213,8 +215,6 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 	// Round Officially Ended
 	demoFile.gameEvents.on('round_officially_ended', () => {
 		rounds.push([])
-
-		assignOrSwapTeams()
 
 		if (process.stdout.isTTY) console.info(teams.t.score, 'T - CT', teams.ct.score)
 	})
