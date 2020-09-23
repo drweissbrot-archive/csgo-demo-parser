@@ -176,6 +176,11 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 
 	// Freeze Time ends
 	demoFile.gameEvents.on('round_freeze_end', (e) => {
+		const disallowedEventsThisRound = rounds[rounds.length - 1]
+			.filter(({ type }) => ! ['item_pickup', 'round_start'].includes(type))
+
+		if (disallowedEventsThisRound.length > 0) rounds.push([])
+
 		log('freeze_time_ended', { number: demoFile.gameRules.roundsPlayed })
 
 		assignOrSwapTeams()
