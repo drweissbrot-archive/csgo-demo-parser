@@ -72,11 +72,15 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 		)
 	}
 
-	const assignOrSwapTeams = (forceNoSwap = false) => {
-		if (! teams.t || ! teams.ct) {
+	const initTeamData = (force = false) => {
+		if (force || ! teams.t || ! teams.ct) {
 			teams.t = teamData(2)
 			teams.ct = teamData(3)
 		}
+	}
+
+	const assignOrSwapTeams = (forceNoSwap = false) => {
+		initTeamData()
 
 		let remainingPlayersCt = 0
 
@@ -250,6 +254,7 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 		if (process.stdout.isTTY) console.info('match started')
 
 		rounds = [ [] ]
+		initTeamData(true)
 
 		log('freeze_time_ended', { number: demoFile.gameRules.roundsPlayed })
 	})
