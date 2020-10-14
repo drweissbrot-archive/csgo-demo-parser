@@ -64,6 +64,12 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 		throw 'cannot find bombsite'
 	}
 
+	const filterOutBots = (player) => {
+		return (player)
+			? player.steamId !== 'BOT'
+			: false
+	}
+
 	const demoFile = new demofile.DemoFile()
 
 	const log = (type, data) => {
@@ -95,8 +101,8 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 		}
 
 		if (forceNoSwap
-			|| remainingPlayersT > demoFile.teams[2].members.filter(({ steamId }) => steamId !== 'BOT').length / 2
-			|| remainingPlayersCt > demoFile.teams[3].members.filter(({ steamId }) => steamId !== 'BOT').length / 2) {
+			|| remainingPlayersT > demoFile.teams[2].members.filter(filterOutBots).length / 2
+			|| remainingPlayersCt > demoFile.teams[3].members.filter(filterOutBots).length / 2) {
 			// same teams, merge player arrays
 			teams.t = Object.assign(teamData(2), {
 				players: teams.t.players.concat(demoFile.teams[2].members.map(steamId).filter((player) => {
