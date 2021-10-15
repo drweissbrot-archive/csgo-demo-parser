@@ -53,7 +53,7 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 			&& v.z >= min.z && v.z <= max.z
 	}
 
-	const bombsiteName = (siteIndex) => {
+	const bombsiteName = (siteIndex, userid) => {
 		const entity = demoFile.entities.entities[siteIndex]
 		const vectorMin = entity.getProp('DT_CollisionProperty', 'm_vecMins')
 		const vectorMax = entity.getProp('DT_CollisionProperty', 'm_vecMaxs')
@@ -61,7 +61,22 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 		if (bombsiteCenters.a && vectorInside(bombsiteCenters.a, vectorMin, vectorMax)) return 'a'
 		if (bombsiteCenters.b && vectorInside(bombsiteCenters.b, vectorMin, vectorMax)) return 'b'
 
-		throw 'cannot find bombsite'
+		// if neither site is within the vector, take the one the interacting player is closer to
+		const user = demoFile.entities.getByUserId(userid)
+
+		const distanceA = Math.sqrt(
+			Math.pow(bombsiteCenters.a.x - user.position.x, 2),
+			Math.pow(bombsiteCenters.a.y - user.position.y, 2),
+			Math.pow(bombsiteCenters.a.z - user.position.z, 2),
+		)
+
+		const distanceB = Math.sqrt(
+			Math.pow(bombsiteCenters.b.x - user.position.x, 2),
+			Math.pow(bombsiteCenters.b.y - user.position.y, 2),
+			Math.pow(bombsiteCenters.b.z - user.position.z, 2),
+		)
+
+		return (distanceB < distanceA) ? 'b' : 'a'
 	}
 
 	const filterOutBots = (player) => {
@@ -297,7 +312,7 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 	demoFile.gameEvents.on('bomb_planted', (e) => {
 		log('plant', {
 			planter: steamId(demoFile.entities.getByUserId(e.userid)),
-			site: bombsiteName(e.site),
+			site: bombsiteName(e.site, e.userid),
 		})
 	})
 
@@ -305,7 +320,7 @@ fs.readFile(process.argv[2], async (err, buffer) => {
 	demoFile.gameEvents.on('bomb_defused', (e) => {
 		log('defuse', {
 			defuser: steamId(demoFile.entities.getByUserId(e.userid)),
-			site: bombsiteName(e.site),
+			site: bombsiteName(e.site, e.userid),
 		})
 	})
 
