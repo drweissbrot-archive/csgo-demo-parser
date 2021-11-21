@@ -1,3 +1,8 @@
+# Moved.
+This repository is now archived, and the project has been moved to the main repository, [drweissbrot/csgo-stats](https://github.com/drweissbrot/csgo-stats). Honestly I'm not even sure why I didn't do it this way in the first place.
+
+---
+
 # csgo-demo-parser
 This is exclusively used in the demo import process of [drweissbrot/csgo-stats](https://github.com/drweissbrot/csgo-stats), which provides a Counter-Strike: Global Offensive match history.
 
